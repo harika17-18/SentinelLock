@@ -62,7 +62,8 @@ from auth.security import (
 
 from auth.dependencies import (
     get_current_user,
-    require_role
+    require_role,
+    require_roles
 )
 
 from sqlalchemy import (
@@ -580,7 +581,9 @@ def root():
 
 
 @app.get("/database-test")
-def database_test():
+def database_test(
+    current_user: dict = Depends(require_role("admin"))
+):
 
     with engine.connect() as connection:
 
@@ -592,7 +595,9 @@ def database_test():
 
 
 @app.get("/user-model-test")
-def user_model_test():
+def user_model_test(
+    current_user: dict = Depends(require_role("admin"))
+):
 
     return {
         "model": "User",
@@ -602,7 +607,9 @@ def user_model_test():
 
 
 @app.get("/device-model-test")
-def device_model_test():
+def device_model_test(
+    current_user: dict = Depends(require_role("admin"))
+):
 
     return {
         "model": "Device",
@@ -612,7 +619,9 @@ def device_model_test():
 
 
 @app.get("/transaction-model-test")
-def transaction_model_test():
+def transaction_model_test(
+    current_user: dict = Depends(require_role("admin"))
+):
 
     return {
         "model": "Transaction",
@@ -622,7 +631,9 @@ def transaction_model_test():
 
 
 @app.get("/security-event-model-test")
-def security_event_model_test():
+def security_event_model_test(
+    current_user: dict = Depends(require_role("admin"))
+):
 
     return {
         "model": "SecurityEvent",
@@ -632,7 +643,9 @@ def security_event_model_test():
 
 
 @app.get("/incident-model-test")
-def incident_model_test():
+def incident_model_test(
+    current_user: dict = Depends(require_role("admin"))
+):
 
     return {
         "model": "Incident",
@@ -646,7 +659,9 @@ def incident_model_test():
 # =========================
 
 @app.get("/risk-test")
-def risk_test():
+def risk_test(
+    current_user: dict = Depends(require_role("admin"))
+):
 
     risk_score = calculate_transaction_risk(
         amount=50000,
@@ -664,7 +679,9 @@ def risk_test():
 # =========================
 
 @app.get("/incident-test")
-def incident_test():
+def incident_test(
+    current_user: dict = Depends(require_role("admin"))
+):
 
     incident = build_incident_data(
         incident_reference="INC-TEST-001",
@@ -682,7 +699,9 @@ def incident_test():
 # =========================
 
 @app.get("/alert-test")
-def alert_test():
+def alert_test(
+    current_user: dict = Depends(require_role("admin"))
+):
 
     alert = create_alert(
         incident_reference="INC-TEST-001",
@@ -706,7 +725,7 @@ def create_transaction(
     amount: float,
     sender_identifier: str,
     receiver_identifier: str,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(require_role("admin"))
 ):
 
     with SessionLocal() as db:
@@ -770,7 +789,7 @@ def create_security_event(
     source: str,
     description: str,
     risk_score: float = 0.0,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(require_role("admin"))
 ):
 
     with SessionLocal() as db:
@@ -902,7 +921,7 @@ def get_devices(
 @app.get("/correlate-device/{device_id}")
 def correlate_device(
     device_id: int,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(require_roles("admin", "investigator"))
 ):
 
     with SessionLocal() as db:
@@ -982,7 +1001,7 @@ def correlate_device(
 @app.post("/correlate-device/{device_id}/create-incident")
 def correlate_and_create_incident(
     device_id: int,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(require_roles("admin", "investigator"))
 ):
 
     with SessionLocal() as db:
@@ -1147,7 +1166,9 @@ def correlate_and_create_incident(
 # =========================
 
 @app.get("/correlation-test")
-def correlation_test():
+def correlation_test(
+    current_user: dict = Depends(require_role("admin"))
+):
 
     result = build_correlation_result(
         transaction_reference="TXN-TEST-001",
@@ -1164,7 +1185,9 @@ def correlation_test():
 # =========================
 
 @app.get("/correlated-incident-test")
-def correlated_incident_test():
+def correlated_incident_test(
+    current_user: dict = Depends(require_role("admin"))
+):
 
     incident = create_correlated_incident(
         transaction_reference="TXN-TEST-001",
@@ -1181,7 +1204,9 @@ def correlated_incident_test():
 # =========================
 
 @app.get("/investigation-test")
-def investigation_test():
+def investigation_test(
+    current_user: dict = Depends(require_role("admin"))
+):
 
     events = [
 
@@ -1348,7 +1373,9 @@ def investigate_incident(
 # =========================
 
 @app.get("/money-flow-test")
-def money_flow_test():
+def money_flow_test(
+    current_user: dict = Depends(require_role("admin"))
+):
 
     transaction = build_money_flow(
         transaction_reference="TXN-TEST-001",
@@ -1593,7 +1620,7 @@ def get_incident_evidence(
 @app.post("/incidents/{incident_id}/audit-log")
 def create_incident_audit_log(
     incident_id: int,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(require_roles("admin", "investigator"))
 ):
 
     with SessionLocal() as db:
@@ -1838,7 +1865,9 @@ def get_investigation_report(
 # =========================
 
 @app.get("/investigation-package-test")
-def investigation_package_test():
+def investigation_package_test(
+    current_user: dict = Depends(require_role("admin"))
+):
 
     incident_reference = "INC-TXN-TEST-001-1"
 
@@ -2070,19 +2099,18 @@ def login_user(request: LoginRequest):
 
 @app.post("/auth/test")
 def auth_test(
-    user_id: int = 1,
-    role: str = "user"
+    current_user: dict = Depends(require_role("admin"))
 ):
 
     token = create_access_token(
-        user_id=user_id,
-        role=role
+        user_id=current_user["user_id"],
+        role=current_user["role"]
     )
 
     return {
         "message": "Authentication token generated",
-        "user_id": user_id,
-        "role": role,
+        "user_id": current_user["user_id"],
+        "role": current_user["role"],
         "token_type": "bearer",
         "access_token": token
     }
@@ -2205,7 +2233,7 @@ def get_incident(
 @app.patch("/incidents/{incident_id}/resolve")
 def resolve_incident(
     incident_id: int,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(require_roles("admin", "investigator"))
 ):
 
     with SessionLocal() as db:
@@ -2292,7 +2320,7 @@ def get_all_alerts(
 @app.post("/incidents/{incident_id}/response")
 def create_incident_response(
     incident_id: int,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(require_roles("admin", "investigator"))
 ):
 
     with SessionLocal() as db:
