@@ -140,6 +140,29 @@ interface ReportResponse {
   status: string;
 }
 
+interface ResponseAction {
+  id: number;
+  incident_reference: string;
+  action: string;
+  status: string;
+  requires_authorization: boolean;
+  requested_by: number;
+  created_at: string;
+}
+
+interface ResponseActionResponse {
+  message: string;
+  incident: {
+    id: number;
+    incident_reference: string;
+    severity: string;
+    risk_score: number;
+    status: string;
+  };
+  response: ResponseAction;
+  requested_by: number;
+}
+
 /* =========================================================
    APP
 ========================================================= */
@@ -433,16 +456,16 @@ function showDashboard(token: string): void {
       <aside class="sidebar">
 
         <div class="sidebar-brand">
-        
+
           <div class="brand-icon">
             <i data-lucide="shield-check"></i>
           </div>
-        
+
           <div>
             <strong>SentinelLock</strong>
             <span>Security Platform</span>
           </div>
-          
+
           <button
             id="sidebar-close-button"
             class="sidebar-close-button"
@@ -857,7 +880,7 @@ function showDashboard(token: string): void {
   setupDashboardEvents(token);
 
   loadDashboardStats();
-  
+
   loadIncidents();
 }
 
@@ -1566,6 +1589,175 @@ async function loadIncidentManagementPage(
    INCIDENT DETAILS
 ========================================================= */
 
+async function requestIncidentResponse(
+  incidentId: number
+): Promise<void> {
+
+  const button =
+    document.querySelector<HTMLButtonElement>(
+      "#response-button"
+    );
+
+  if (button) {
+    button.disabled = true;
+    button.innerHTML = `
+      <i data-lucide="loader-circle"></i>
+      Generating Response...
+    `;
+    refreshIcons();
+  }
+
+  try {
+
+    const response =
+      await apiRequest(
+        `${API_BASE_URL}/incidents/${incidentId}/response`,
+        {
+          method: "POST"
+        }
+      );
+
+    if (response.status === 401) {
+      logout();
+      return;
+    }
+
+    const data =
+      (await response.json()) as
+        | ResponseActionResponse
+        | { detail?: string };
+
+    if (!response.ok) {
+      throw new Error(
+        "detail" in data && data.detail
+          ? String(data.detail)
+          : `Response request failed: ${response.status}`
+      );
+    }
+
+    const result =
+      data as ResponseActionResponse;
+
+    const action =
+      result.response?.action || "review";
+
+    const status =
+      result.response?.status || "pending";
+
+    const authorization =
+      result.response?.requires_authorization
+        ? "Authorization required"
+        : "Authorization not required";
+
+    document
+      .querySelector<HTMLElement>(
+        "#response-result"
+      )
+      ?.remove();
+
+    const notice =
+      document.createElement("div");
+
+    notice.id = "response-result";
+    notice.className = "empty-state";
+
+    notice.innerHTML = `
+      <div class="response-result-icon">
+        <i data-lucide="shield-check"></i>
+      </div>
+
+      <div class="response-result-content">
+        <strong>
+          Response recommendation generated
+        </strong>
+
+        <p>
+          Recommended action:
+          <b>${escapeHtml(action)}</b>
+          · Status:
+          <b>${escapeHtml(status)}</b>
+          · ${escapeHtml(authorization)}
+        </p>
+      </div>
+    `;
+
+    const actionRow =
+      document.querySelector<HTMLElement>(
+        "#incident-details-container .action-row"
+      );
+
+    if (actionRow) {
+      actionRow.before(notice);
+    }
+
+    if (button) {
+      button.disabled = false;
+      button.innerHTML = `
+        <i data-lucide="shield-check"></i>
+        Response Generated
+      `;
+    }
+
+    refreshIcons();
+
+  } catch (error) {
+
+    console.error(
+      "Failed to generate incident response:",
+      error
+    );
+
+    document
+      .querySelector<HTMLElement>(
+        "#response-result"
+      )
+      ?.remove();
+
+    const notice =
+      document.createElement("div");
+
+    notice.id = "response-result";
+    notice.className = "error-state";
+
+    notice.innerHTML = `
+      <div class="response-result-icon">
+        <i data-lucide="circle-alert"></i>
+      </div>
+
+      <div class="response-result-content">
+        <strong>
+          Unable to generate response
+        </strong>
+
+        <p>
+          Please make sure the SentinelLock backend is running
+          and try again.
+        </p>
+      </div>
+    `;
+
+    const actionRow =
+      document.querySelector<HTMLElement>(
+        "#incident-details-container .action-row"
+      );
+
+    if (actionRow) {
+      actionRow.before(notice);
+    }
+
+    if (button) {
+      button.disabled = false;
+      button.innerHTML = `
+        <i data-lucide="shield-check"></i>
+        Response
+      `;
+    }
+
+    refreshIcons();
+  }
+}
+
+
 async function showIncidentDetails(
   token: string,
   incidentId: number
@@ -1789,18 +1981,25 @@ async function showIncidentDetails(
 
           <button
             id="investigate-button"
-            class="primary-button"
+           class="primary-button"s
           >
             <i data-lucide="search"></i>
             Investigate Incident
           </button>
-
+          <button
+            id="response-button"
+            class="secondary-button"
+          >
+            <i data-lucide="shield-check"></i>
+            Response
+          </button>
           <button
             id="money-flow-button"
             class="secondary-button"
           >
             <i data-lucide="arrow-right-left"></i>
             Money Flow
+
           </button>
 
           <button
@@ -1843,6 +2042,18 @@ async function showIncidentDetails(
         () =>
           showInvestigationPage(
             token,
+            incidentId
+          )
+      );
+
+    document
+      .querySelector<HTMLButtonElement>(
+        "#response-button"
+      )
+      ?.addEventListener(
+        "click",
+        () =>
+          requestIncidentResponse(
             incidentId
           )
       );
@@ -2021,7 +2232,7 @@ async function showInvestigationPage(
             <h2>
               ${escapeHtml(
                 data.incident_reference ||
-                
+
                 `INCIDENT-${incidentId}`
               )}
             </h2>
@@ -2805,10 +3016,10 @@ async function showEvidencePage(
 
     const data =
       (await response.json()) as EvidenceApiResponse;
-    
+
     const evidence =
       data.evidence;
-      
+
     const items =
       evidence?.items || [];
 
